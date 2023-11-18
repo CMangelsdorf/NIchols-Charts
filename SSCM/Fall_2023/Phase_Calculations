@@ -1,1 +1,84 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Thu Nov 16 20:27:56 2023
 
+@author: shifobrains@ieee.org
+"""
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+
+def main():
+    df = pd.read_excel('C:\\Users\\<data file path here>')
+    
+    timedomain = df[:]['<name of data column here>'].to_numpy()  # Convert to array
+    
+    from scipy.fft import fft
+    freqdomain = fft(timedomain)        # FFT happens here
+    
+    from numpy import exp, abs, angle
+    polar2z = lambda r,θ: r * exp( 1j * θ )
+    z2polar = lambda z: ( abs(z), angle(z) )
+    
+    rs, thetas = z2polar(freqdomain)    # Convert to polar coordinates
+    mags=rs*2/len(freqdomain)           # Raw FFT magnitudes
+    logmags=20*np.log10(mags)           # FFT magnitudes in dB
+    
+    plt.plot(logmags)
+    phaseplot(thetas, logmags, rbig=-50,rsmall=-90)
+    
+    freqdomain = fft(np.roll(timedomain,527))        # FFT happes here
+    rs, thetas = z2polar(freqdomain)    # Convert to polar coordinates
+    mags=rs*2/len(freqdomain)           # Raw FFT magnitudes
+    logmags=20*np.log10(mags)           # FFT magnitudes in dB
+    phaseplot(thetas, logmags, rbig=-50,rsmall=-90)
+    
+    thetas=relphase(thetas, logmags)    # Exact calculation for zero phase fundamental.
+    phaseplot(thetas, logmags, rbig=-50,rsmall=-90) 
+    
+def relphase(thetas, logmags):  # Phase correct all points
+    rthetas=thetas
+    nhalf=len(thetas)//2
+    f0 = np.argmax(logmags[:nhalf])   #Bin number of fundamental
+    ph0 = thetas[f0]                  #Phase of fundamental (radians)
+    #for i in range(2045,2052): print(i, thetas[i])
+    rthetas[:nhalf] = thetas[:nhalf] - (ph0/f0)*np.arange(0,nhalf,1)
+    rthetas[nhalf+1:] = thetas[nhalf+1:] + (ph0/f0)*np.arange(nhalf-1,0,-1) 
+    #for i in range(2045,2052): print(i, rthetas[i])
+    return rthetas
+
+
+def phaseplot(thetas, logmags, rbig=20, rsmall=-120):
+    phaseplt, ax = plt.subplots(subplot_kw={'projection': 'polar'})
+    ax.plot(thetas, logmags, 'b.')
+    
+    f0 = np.argmax(logmags)   #Bin number of fundamental
+    degs = np.rad2deg(thetas) #FFT data in degrees
+    deg0 = degs[f0]           #Phase of fundamental (degrees)
+    ph0 = thetas[f0]          #Phase of fundamental (radians)
+    vectcolors = ["black", "green", "red"]  #Phasor colors 
+    
+    print('Bin number of fundamental: %5d' %(f0))
+    pnphase = lambda phdeg: ((phdeg+180) % 360)-180 # Use for -180 to +180 phase notation
+    
+    for i in range(1,4):    # Plot lines for first three harmonics
+        ax.plot([0,thetas[f0*i]],[rsmall,logmags[f0*i]], linewidth=2
+                , color=vectcolors[i-1])
+        ax.annotate(i,[thetas[f0*i],logmags[f0*i]],xytext=(-2,5), 
+                    xycoords='data', textcoords="offset points", weight='bold', color=vectcolors[i-1])
+        print('Harmonic %1d   dB: %3d   deg: %7.2f   relative: %7.2f  ' 
+              %(i, logmags[f0*i],degs[f0*i], pnphase(degs[f0*i]-deg0*i)))
+        
+
+    ax.set_rticks([-80, -70, -60, -50, -40, -20, 0])
+    ax.set_rlabel_position(140)
+    ax.set(thetagrids=range(0,360,30))
+    ax.grid(True)
+    ax.set_rmax(rbig)
+    ax.set_rmin(rsmall)
+    #plt.show()
+    from datetime import datetime
+    plt.savefig("img/" + datetime.now().strftime("%d%m%Y %H.%M.%S%f.svg"), format='svg', dpi=300, bbox_inches='tight')
+
+
+main()
